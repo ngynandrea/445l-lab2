@@ -32,10 +32,17 @@
 #include "../inc/LaunchPad.h"
 #include "../inc/CortexM.h"
 
+struct pmf_entry {
+	uint32_t ADCvalue;
+	uint32_t instances;
+};
+
 volatile uint32_t ADCvalue;
 volatile uint32_t ADCvalue_ready;
 volatile uint32_t ADCvalues[1000];
 volatile uint32_t ADCtimes[1000];
+volatile struct pmf_entry pmf[1000];
+volatile uint32_t jitter;
 // This debug function initializes Timer0A to request interrupts
 // at a 100 Hz frequency.  It is similar to FreqMeasure.c.
 void Timer0A_Init100HzInt(void){
@@ -79,6 +86,20 @@ void Timer1_Init(void) {
 	TIMER1_CTL_R = 0x00000001;
 }
 
+void add_pmf_entry(uint32_t ADCvalue) {
+	for (uint32_t i = 0; i < 1000; i++) {
+		if (pmf[i].ADCvalue == 0 && pmf[i].instances == 0) {
+			pmf[i].ADCvalue = ADCvalue;
+			pmf[i].instances++;
+			return;
+		}
+		if (pmf[i].ADCvalue == ADCvalue) {
+			pmf[i].instances++;
+			return;
+		}
+	}
+}
+
 int main(void){
   PLL_Init(Bus80MHz);                   // 80 MHz
   LaunchPad_Init();                     // activate port F
@@ -95,6 +116,25 @@ int main(void){
 			ADCvalue_ready = 0;
 			ADCvalues[i] = ADCvalue;
 			ADCtimes[i] = TIMER1_TAR_R;
+			i++;
+		} else if (i == 1000) {
+			// Calculate jitter
+			uint32_t last_time = ADCtimes[0];
+			uint32_t min_delta = INT_MAX;
+			uint32_t max_delta = INT_MIN;
+			for (uint32_t j = 1; j < 1000; j++) {
+				// PMF function
+				add_pmf_entry(ADCvalues[j]);
+				
+				// Calculate max and min differences
+				if (last_time - ADCtimes[j] > max_delta) {
+					max_delta = last_time - ADCtimes[j];
+				} else if (last_time - ADCtimes[j] < min_delta) {
+					min_delta = last_time - ADCtimes[j];
+				}
+				last_time = ADCtimes[j];
+			}
+			jitter = max_delta - min_delta;
 			i++;
 		}
     PF1 ^= 0x02;  // toggles when running in main
