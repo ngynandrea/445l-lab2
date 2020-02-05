@@ -26,11 +26,14 @@
 // bottom of X-ohm potentiometer connected to ground
 // top of X-ohm potentiometer connected to +3.3V 
 #include <stdint.h>
+#include <stdio.h>
+#include <limits.h>
 #include "../inc/ADCSWTrigger.h"
 #include "../inc/tm4c123gh6pm.h"
 #include "../inc/PLL.h"
 #include "../inc/LaunchPad.h"
 #include "../inc/CortexM.h"
+#include "../inc/UART.h"
 
 struct pmf_entry {
 	uint32_t ADCvalue;
@@ -106,6 +109,7 @@ int main(void){
   ADC0_InitSWTriggerSeq3_Ch9();         // allow time to finish activating
   Timer0A_Init100HzInt();               // set up Timer0A for 100 Hz interrupts
 	Timer1_Init();
+	UART_Init();
   PF2 = 0;                      // turn off LED
   EnableInterrupts();
 	
@@ -113,6 +117,9 @@ int main(void){
 	volatile uint32_t i = 0;
   while(1){
 		if (ADCvalue_ready && i < 1000) {
+			if (i % 100 == 0) {
+				printf("i: %d\n", i);
+			}
 			ADCvalue_ready = 0;
 			ADCvalues[i] = ADCvalue;
 			ADCtimes[i] = TIMER1_TAR_R;
@@ -120,8 +127,8 @@ int main(void){
 		} else if (i == 1000) {
 			// Calculate jitter
 			uint32_t last_time = ADCtimes[0];
-			uint32_t min_delta = INT_MAX;
-			uint32_t max_delta = INT_MIN;
+			uint32_t min_delta = UINT_MAX;
+			uint32_t max_delta = 0;
 			for (uint32_t j = 1; j < 1000; j++) {
 				// PMF function
 				add_pmf_entry(ADCvalues[j]);
@@ -135,58 +142,17 @@ int main(void){
 				last_time = ADCtimes[j];
 			}
 			jitter = max_delta - min_delta;
+			
+			printf("Jitter: %d\n", jitter);
+			// Send pmf through uart
+			for (uint32_t j = 0; j < 1000; j++) {
+				if (pmf[j].ADCvalue == 0 && pmf[j].instances == 0) {
+					break;
+				}
+				printf("%04d\t\t%d\n", pmf[j].ADCvalue, pmf[j].instances);
+			}
 			i++;
 		}
     PF1 ^= 0x02;  // toggles when running in main
   }
 }
-
-/*
-volatile uint32_t ADCvalue_ready;
-
-void Timer0A_Handler(void){
-  TIMER0_ICR_R = TIMER_ICR_TATOCINT;    // acknowledge timer0A timeout
-  PF2 ^= 0x04;                   // profile
-  PF2 ^= 0x04;                   // profile
-  ADCvalue = ADC0_InSeq3();
-  PF2 ^= 0x04;                   // profile
-	ADCvalue_ready = 1;
-}
-
-void Timer1_Init(void) { 
-	volatile uint32_t delay;
-	SYSCTL_RCGCTIMER_R |= 0x02;
-	delay = SYSCTL_RCGCTIMER_R;
-	TIMER1_CTL_R = 0x00000000;
-	TIMER1_CFG_R = 0x00000000;
-	TIMER1_TAMR_R = 0x00000002;
-	TIMER1_TAILR_R = 0xFFFFFFFF;
-	TIMER1_TAPR_R = 0;
-	TIMER1_CTL_R = 0x00000001;
-}
-
-int main(void){
-  PLL_Init(Bus80MHz);                   // 80 MHz
-  LaunchPad_Init();                     // activate port F
-  ADC0_InitSWTriggerSeq3_Ch9();         // allow time to finish activating
-  Timer0A_Init100HzInt();               // set up Timer0A for 100 Hz interrupts
-	Timer1_Init();
-  PF2 = 0;                      // turn off LED
-  EnableInterrupts();
-	
-	// Arrays for debugging dumps
-	volatile uint32_t ADCvalues[1000];
-	volatile uint32_t ADCtimes[1000];
-	volatile uint32_t i = 0;
-  while(1){
-		if (ADCvalue_ready && i < 1000) {
-			ADCvalue_ready = 0;
-			ADCvalues[i] = ADCvalue;
-			ADCtimes[i] = TIMER1_TAR_R;
-			i++;
-		}
-    PF1 ^= 0x02;  // toggles when running in main
-  }
-}
-
-*/
