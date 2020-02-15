@@ -1,10 +1,11 @@
-// ADCTestMain.c
-// Runs on TM4C123
-// This program periodically samples ADC channel 0 and stores the
-// result to a global variable that can be accessed with the JTAG
-// debugger and viewed with the variable watch feature.
-// Daniel Valvano
-// September 5, 2015
+/*
+ADCTestMain.c
+Andrea Nguyen, Kenny Tang
+Lab 2 Tester File
+Lab 2
+Bhagawat Vinay
+Feb 7, 2020
+*/
 
 /* This example accompanies the book
    "Embedded Systems: Real Time Interfacing to Arm Cortex M Microcontrollers",
